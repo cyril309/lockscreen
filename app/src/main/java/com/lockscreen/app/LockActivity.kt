@@ -99,7 +99,7 @@ class LockActivity : Activity() {
         arrows.textSize = 12f
         arrows.gravity = Gravity.CENTER
         arrows.setTextColor(Color.parseColor("#E8E2DC"))
-        root.addView(arrows, lp(wrap, wrap, Gravity.BOTTOM or Gravity.END, 0, 0, dp(26), dp(84)))
+        root.addView(arrows, lp(wrap, wrap, Gravity.BOTTOM or Gravity.END, 0, 0, dp(26), dp(116)))
 
         bottomRow = LinearLayout(this)
         bottomRow.orientation = LinearLayout.HORIZONTAL
@@ -147,7 +147,7 @@ class LockActivity : Activity() {
         }
         bottomRow.addView(camera, LinearLayout.LayoutParams(dp(44), dp(44)))
 
-        root.addView(bottomRow, lp(match, wrap, Gravity.BOTTOM, dp(16), 0, dp(16), dp(24)))
+        root.addView(bottomRow, lp(match, wrap, Gravity.BOTTOM, dp(16), 0, dp(16), dp(56)))
 
         pinPad = PinPad(
             this,
