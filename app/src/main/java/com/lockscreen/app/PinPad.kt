@@ -47,6 +47,7 @@ class PinPad(
         for (row in rows) {
             val line = LinearLayout(context)
             line.orientation = LinearLayout.HORIZONTAL
+                        line.gravity = Gravity.CENTER_HORIZONTAL
             for (label in row) {
                 line.addView(key(label))
             }
