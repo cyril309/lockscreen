@@ -102,7 +102,12 @@ class LockActivity : Activity() {
         root.addView(lock, lp(dp(20), dp(20), Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(36), 0, 0))
 
         val date = TextView(this)
-        date.text = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date())
+        val dateText = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date())
+        val cachedWeather = Weather.cached(this)
+        date.text = if (cachedWeather != null) "$dateText  ·  $cachedWeather" else dateText
+        Weather.refresh(this) { w ->
+            runOnUiThread { date.text = "$dateText  ·  $w" }
+        }
         date.textSize = 15f
         date.setTextColor(Color.parseColor("#F6DCCB"))
         root.addView(date, lp(wrap, wrap, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(64), 0, 0))
