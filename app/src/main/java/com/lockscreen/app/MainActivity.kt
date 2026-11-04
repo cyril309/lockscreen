@@ -131,7 +131,11 @@ class MainActivity : Activity() {
         addButton("Allow location for weather") {
             requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 2)
         }
-
+        addButton("Hide or show message text on lock screen") {
+            val now = !prefs.getBoolean("hidetext", false)
+            prefs.edit().putBoolean("hidetext", now).apply()
+            Toast.makeText(this, if (now) "Message text hidden" else "Message text shown", Toast.LENGTH_SHORT).show()
+        }
         val scroll = ScrollView(this)
         scroll.addView(root)
         setContentView(scroll)
