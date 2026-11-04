@@ -57,6 +57,7 @@ class PinPad(
         val phoneLock = TextView(context)
         phoneLock.text = "Fingerprint / phone lock"
         phoneLock.textSize = 14f
+        phoneLock.gravity = Gravity.CENTER
         phoneLock.setTextColor(Color.WHITE)
         phoneLock.setPadding(dp(12), dp(14), dp(12), dp(8))
         phoneLock.setOnClickListener { onPhoneLock() }
