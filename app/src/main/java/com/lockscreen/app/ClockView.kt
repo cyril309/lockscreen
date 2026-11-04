@@ -51,7 +51,7 @@ class ClockView(context: Context) : View(context) {
 
         val h = height.toFloat()
         val units = digits.size + 0.35f + 0.3f * (hourDigits.size + 2)
-        var dw = width * 0.92f / units
+        var dw = width * 0.86f / units
         val maxDw = h * 0.21f
         if (dw > maxDw) dw = maxDw
         val gap = dw * 0.3f
