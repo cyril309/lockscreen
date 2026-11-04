@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
@@ -32,6 +34,7 @@ class LockActivity : Activity() {
     private lateinit var bottomRow: LinearLayout
     private lateinit var arrows: TextView
     private var startY = 0f
+    private var torchOn = false
 
     private val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
     private val match = ViewGroup.LayoutParams.MATCH_PARENT
@@ -99,7 +102,7 @@ class LockActivity : Activity() {
         arrows.textSize = 12f
         arrows.gravity = Gravity.CENTER
         arrows.setTextColor(Color.parseColor("#E8E2DC"))
-        root.addView(arrows, lp(wrap, wrap, Gravity.BOTTOM or Gravity.END, 0, 0, dp(26), dp(116)))
+        root.addView(arrows, lp(wrap, wrap, Gravity.BOTTOM or Gravity.END, 0, 0, dp(26), dp(108)))
 
         bottomRow = LinearLayout(this)
         bottomRow.orientation = LinearLayout.HORIZONTAL
@@ -114,6 +117,12 @@ class LockActivity : Activity() {
             }
         }
         bottomRow.addView(assistant, LinearLayout.LayoutParams(dp(44), dp(44)))
+
+        val torch = circle("☼", Color.parseColor("#3B3157"), Color.WHITE)
+        torch.setOnClickListener { toggleTorch() }
+        val torchParams = LinearLayout.LayoutParams(dp(44), dp(44))
+        torchParams.setMargins(dp(8), 0, 0, 0)
+        bottomRow.addView(torch, torchParams)
 
         val am = getSystemService(AlarmManager::class.java)
         val next = am.nextAlarmClock
@@ -147,7 +156,7 @@ class LockActivity : Activity() {
         }
         bottomRow.addView(camera, LinearLayout.LayoutParams(dp(44), dp(44)))
 
-        root.addView(bottomRow, lp(match, wrap, Gravity.BOTTOM, dp(16), 0, dp(16), dp(56)))
+        root.addView(bottomRow, lp(match, wrap, Gravity.BOTTOM, dp(16), 0, dp(16), dp(48)))
 
         pinPad = PinPad(
             this,
@@ -163,6 +172,11 @@ class LockActivity : Activity() {
         hideBars()
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideBars()
+    }
+
     @Suppress("DEPRECATION")
     private fun hideBars() {
         if (Build.VERSION.SDK_INT >= 30) {
@@ -173,6 +187,23 @@ class LockActivity : Activity() {
                 View.SYSTEM_UI_FLAG_FULLSCREEN or
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        }
+    }
+
+    private fun toggleTorch() {
+        try {
+            val cm = getSystemService(CameraManager::class.java)
+            val id = cm.cameraIdList.firstOrNull {
+                cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            }
+            if (id == null) {
+                Toast.makeText(this, "No flashlight found", Toast.LENGTH_SHORT).show()
+                return
+            }
+            torchOn = !torchOn
+            cm.setTorchMode(id, torchOn)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Flashlight not available", Toast.LENGTH_SHORT).show()
         }
     }
 
