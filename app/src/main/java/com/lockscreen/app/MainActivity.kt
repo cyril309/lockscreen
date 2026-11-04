@@ -18,6 +18,8 @@ import android.widget.Toast
 
 class MainActivity : Activity() {
 
+    private val pickCode = 42
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -44,7 +46,7 @@ class MainActivity : Activity() {
         }
 
         addText("Lockscreen setup", 24f)
-        addText("Do these steps in order.", 16f)
+        addText("Do steps 1 to 4 in order.", 16f)
 
         addButton("1. Allow display over other apps") {
             val i = Intent(
@@ -101,8 +103,52 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Lock screen stopped", Toast.LENGTH_SHORT).show()
         }
 
+        addText("Colors (used when no photo is set)", 18f)
+
+        for (i in Themes.names.indices) {
+            addButton("Color: " + Themes.names[i]) {
+                prefs.edit().putInt("theme", i).apply()
+                Toast.makeText(this, Themes.names[i] + " selected", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        addText("Photo wallpaper", 18f)
+
+        addButton("Choose photo wallpaper") {
+            val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            i.addCategory(Intent.CATEGORY_OPENABLE)
+            i.type = "image/*"
+            startActivityForResult(i, pickCode)
+        }
+
+        addButton("Remove photo wallpaper") {
+            Wallpaper.clear(this)
+            Toast.makeText(this, "Photo removed", Toast.LENGTH_SHORT).show()
+        }
+
+        addText("Weather (coming in the next update)", 18f)
+
+        addButton("Allow location for weather") {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 2)
+        }
+
         val scroll = ScrollView(this)
         scroll.addView(root)
         setContentView(scroll)
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == pickCode && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            Thread {
+                val ok = Wallpaper.save(this, uri)
+                runOnUiThread {
+                    val msg = if (ok) "Photo saved" else "Could not use that photo"
+                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                }
+            }.start()
+        }
     }
 }
