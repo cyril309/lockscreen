@@ -17,128 +17,149 @@ import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : Activity() {
-
     private val pickCode = 42
+    private lateinit var notificationStatus: TextView
+    private lateinit var serviceNotificationStatus: TextView
+    private lateinit var locationStatus: TextView
+    private lateinit var serviceStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         val pad = (20 * resources.displayMetrics.density).toInt()
         val prefs = getSharedPreferences("lock", Context.MODE_PRIVATE)
+        // Remove the legacy app-only PIN. It was not equivalent to Android's secure keyguard.
+        prefs.edit().remove("pin").apply()
 
-        val root = LinearLayout(this)
-        root.orientation = LinearLayout.VERTICAL
-        root.setPadding(pad, pad, pad, pad)
-
-        fun addText(value: String, size: Float) {
-            val t = TextView(this)
-            t.text = value
-            t.textSize = size
-            t.setPadding(0, pad / 2, 0, pad / 4)
-            root.addView(t)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
         }
-
+        fun addText(value: String, size: Float): TextView = TextView(this).apply {
+            text = value
+            textSize = size
+            setPadding(0, pad / 2, 0, pad / 4)
+            root.addView(this)
+        }
         fun addButton(value: String, action: () -> Unit) {
-            val b = Button(this)
-            b.text = value
-            b.setOnClickListener { action() }
-            root.addView(b)
+            root.addView(Button(this).apply {
+                text = value
+                setOnClickListener { action() }
+            })
         }
 
-        addText("Lockscreen setup", 24f)
-        addText("Do steps 1 to 4 in order.", 16f)
+        addText("Lockscreen-style display", 24f)
+        addText(
+            "Important: Android remains responsible for locking and unlocking your device. This app is a visual screen only; it cannot replace or strengthen your phone's system lock. Keep a secure screen lock enabled in Android Settings.",
+            16f
+        )
+        addText(
+            "The screen-on display is best-effort and may be restricted by some Android versions or manufacturers. If it does not open automatically, tap the app's ongoing notification.",
+            14f
+        )
 
-        addButton("1. Allow display over other apps") {
-            val i = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivity(i)
-        }
-
-        addButton("2. Allow notifications") {
-            if (Build.VERSION.SDK_INT >= 33) {
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-            }
-        }
-
-        addText("3. Optional PIN for this lock screen (4 to 6 digits). Leave it unset to unlock with your phone's own lock instead.", 16f)
-
-        val pinBox = EditText(this)
-        pinBox.hint = "New PIN"
-        pinBox.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        root.addView(pinBox)
-
-        addButton("Save PIN") {
-            val v = pinBox.text.toString()
-            if (v.length in 4..6) {
-                prefs.edit().putString("pin", v).apply()
-                pinBox.setText("")
-                Toast.makeText(this, "PIN saved", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Use 4 to 6 digits", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        addButton("Remove PIN") {
-            prefs.edit().remove("pin").apply()
-            Toast.makeText(this, "PIN removed", Toast.LENGTH_SHORT).show()
-        }
-
-        addText("4. Start the lock screen. It will also start by itself after a reboot until you tap Stop.", 16f)
-
-        addButton("Start lock screen") {
-            if (!Settings.canDrawOverlays(this)) {
-                Toast.makeText(this, "Do step 1 first", Toast.LENGTH_LONG).show()
-            } else {
+        addText("Service", 18f)
+        serviceStatus = addText("Status: checking…", 14f)
+        addButton("Start lock screen display") {
+            try {
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(Intent(this, LockService::class.java))
+                else startService(Intent(this, LockService::class.java))
                 prefs.edit().putBoolean("autostart", true).apply()
-                startForegroundService(Intent(this, LockService::class.java))
-                Toast.makeText(this, "Lock screen started", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Display service started", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                prefs.edit().putBoolean("autostart", false).apply()
+                Toast.makeText(this, "Could not start service: ${e.localizedMessage ?: "check app permissions"}", Toast.LENGTH_LONG).show()
             }
+            updateStatuses()
         }
-
-        addButton("Stop lock screen") {
+        addButton("Stop lock screen display") {
             prefs.edit().putBoolean("autostart", false).apply()
             stopService(Intent(this, LockService::class.java))
-            Toast.makeText(this, "Lock screen stopped", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Display service stopped", Toast.LENGTH_SHORT).show()
+            updateStatuses()
         }
 
-        addText("Colors (used when no photo is set)", 18f)
-
-        for (i in Themes.names.indices) {
-            addButton("Color: " + Themes.names[i]) {
-                prefs.edit().putInt("theme", i).apply()
-                Toast.makeText(this, Themes.names[i] + " selected", Toast.LENGTH_SHORT).show()
+        addText("Optional features and permissions", 18f)
+        serviceNotificationStatus = addText("Service notification permission: checking…", 14f)
+        addButton("Allow service notifications") {
+            if (Build.VERSION.SDK_INT >= 33) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+            } else {
+                Toast.makeText(this, "Notifications are controlled by Android settings on this version", Toast.LENGTH_SHORT).show()
             }
         }
-
-        addText("Photo wallpaper", 18f)
-
-        addButton("Choose photo wallpaper") {
-            val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
-            i.addCategory(Intent.CATEGORY_OPENABLE)
-            i.type = "image/*"
-            startActivityForResult(i, pickCode)
+        notificationStatus = addText("Notification access: checking…", 14f)
+        addButton("Manage notification access") {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+        addText(
+            "Notification access lets the app read notification titles and previews so it can show them on the display. Leave it off if you do not want that. Notification text is hidden by default.",
+            14f
+        )
+        addButton("Toggle notification preview privacy") {
+            val hide = !prefs.getBoolean("hidetext", true)
+            prefs.edit().putBoolean("hidetext", hide).apply()
+            Toast.makeText(this, if (hide) "Notification previews hidden" else "Notification previews visible", Toast.LENGTH_SHORT).show()
         }
 
+        locationStatus = addText("Weather location: checking…", 14f)
+        addButton("Allow approximate location for weather") {
+            if (Build.VERSION.SDK_INT >= 23) {
+                requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 2)
+            }
+        }
+        addText(
+            "Weather is optional. When enabled, the app uses the last known approximate location and sends its coordinates to Open-Meteo to request current conditions. It does not continuously track location.",
+            14f
+        )
+        addButton("Clear cached weather") {
+            prefs.edit().remove("weather").remove("weather_time").apply()
+            Toast.makeText(this, "Cached weather cleared", Toast.LENGTH_SHORT).show()
+        }
+
+        addText("Appearance", 18f)
+        addText("Colors are used when no photo wallpaper is set.", 14f)
+        for (i in Themes.names.indices) {
+            addButton("Color: ${Themes.names[i]}") {
+                prefs.edit().putInt("theme", i).apply()
+                Toast.makeText(this, "${Themes.names[i]} selected", Toast.LENGTH_SHORT).show()
+            }
+        }
+        addButton("Choose photo wallpaper") {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "image/*"
+            }
+            startActivityForResult(intent, pickCode)
+        }
         addButton("Remove photo wallpaper") {
             Wallpaper.clear(this)
             Toast.makeText(this, "Photo removed", Toast.LENGTH_SHORT).show()
         }
 
-        addText("Weather (coming in the next update)", 18f)
-
-        addButton("Allow location for weather") {
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 2)
-        }
-        addButton("Hide or show message text on lock screen") {
-            val now = !prefs.getBoolean("hidetext", false)
-            prefs.edit().putBoolean("hidetext", now).apply()
-            Toast.makeText(this, if (now) "Message text hidden" else "Message text shown", Toast.LENGTH_SHORT).show()
-        }
         val scroll = ScrollView(this)
         scroll.addView(root)
         setContentView(scroll)
+        updateStatuses()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::notificationStatus.isInitialized) updateStatuses()
+    }
+
+    private fun updateStatuses() {
+        val prefs = getSharedPreferences("lock", Context.MODE_PRIVATE)
+        val listenerEnabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            ?.contains(packageName) == true
+        notificationStatus.text = "Notification access: ${if (listenerEnabled) "enabled" else "off"}"
+        val hasLocation = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        locationStatus.text = "Approximate location for weather: ${if (hasLocation) "allowed" else "off"}"
+        val running = LockService.isRunning
+        serviceStatus.text = "Display service: ${if (running) "running" else "not running"}; autostart after reboot: ${if (prefs.getBoolean("autostart", false)) "on" else "off"}"
+        val notificationGranted = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        serviceNotificationStatus.text = "Service notifications: ${if (notificationGranted) "allowed" else "not allowed (Android may hide the notification)"}"
     }
 
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
@@ -149,8 +170,7 @@ class MainActivity : Activity() {
             Thread {
                 val ok = Wallpaper.save(this, uri)
                 runOnUiThread {
-                    val msg = if (ok) "Photo saved" else "Could not use that photo"
-                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, if (ok) "Photo saved" else "Could not use that photo", Toast.LENGTH_SHORT).show()
                 }
             }.start()
         }

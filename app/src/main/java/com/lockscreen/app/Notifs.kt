@@ -25,7 +25,7 @@ class NotifItem(
 
 object Notifs {
 
-    var items: List<NotifItem> = emptyList()
+    @Volatile var items: List<NotifItem> = emptyList()
 
     private fun timeText(t: Long): String {
         val mins = (System.currentTimeMillis() - t) / 60000
@@ -41,7 +41,7 @@ object Notifs {
         val d = context.resources.displayMetrics.density
         fun px(v: Int): Int = (v * d).toInt()
         val hide = context.getSharedPreferences("lock", Context.MODE_PRIVATE)
-            .getBoolean("hidetext", false)
+            .getBoolean("hidetext", true)
 
         val col = LinearLayout(context)
         col.orientation = LinearLayout.VERTICAL
@@ -135,6 +135,11 @@ object Notifs {
 }
 
 class NotifService : NotificationListenerService() {
+
+    override fun onListenerDisconnected() {
+        Notifs.items = emptyList()
+        super.onListenerDisconnected()
+    }
 
     override fun onListenerConnected() {
         refresh()

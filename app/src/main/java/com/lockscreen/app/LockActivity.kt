@@ -19,6 +19,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowManager
+import android.provider.Settings
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -31,10 +32,9 @@ import java.util.Locale
 class LockActivity : Activity() {
 
     private lateinit var clock: ClockView
-    private lateinit var pinPad: PinPad
     private lateinit var bottomRow: LinearLayout
     private lateinit var arrows: ImageView
-    private var photoView: ImageView? = null
+    private var notificationPanel: LinearLayout? = null
     private var startY = 0f
     private var torchOn = false
 
@@ -42,9 +42,6 @@ class LockActivity : Activity() {
     private val match = ViewGroup.LayoutParams.MATCH_PARENT
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
-
-    private fun savedPin(): String? =
-        getSharedPreferences("lock", Context.MODE_PRIVATE).getString("pin", null)
 
     private fun lp(
         w: Int, h: Int, g: Int,
@@ -82,7 +79,6 @@ class LockActivity : Activity() {
         val photo = Wallpaper.load(this)
         if (photo != null) {
             val iv = ImageView(this)
-            photoView = iv
             iv.setImageBitmap(photo)
             iv.scaleType = ImageView.ScaleType.CENTER_CROP
             root.addView(iv, lp(match, match, Gravity.TOP))
@@ -143,6 +139,17 @@ class LockActivity : Activity() {
         torchParams.setMargins(dp(8), 0, 0, 0)
         bottomRow.addView(torch, torchParams)
 
+        val alerts = TextView(this).apply {
+            text = "Alerts"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+            contentDescription = "Show notifications"
+            setOnClickListener { toggleNotificationPanel(root) }
+        }
+        bottomRow.addView(alerts, LinearLayout.LayoutParams(wrap, dp(44)))
+
         val am = getSystemService(AlarmManager::class.java)
         val next = am.nextAlarmClock
         val pill = TextView(this)
@@ -176,16 +183,6 @@ class LockActivity : Activity() {
         bottomRow.addView(camera, LinearLayout.LayoutParams(dp(44), dp(44)))
 
         root.addView(bottomRow, lp(match, wrap, Gravity.BOTTOM, dp(16), 0, dp(16), dp(48)))
-
-        pinPad = PinPad(
-            this,
-            { savedPin() },
-            { dismissSystemLock() },
-            { hidePin() },
-            { dismissSystemLock() }
-        )
-        pinPad.visibility = View.GONE
-        root.addView(pinPad, lp(match, match, Gravity.TOP))
 
         setContentView(root)
         hideBars()
@@ -238,37 +235,60 @@ class LockActivity : Activity() {
         return v
     }
 
-    private fun showPin() {
-        pinPad.reset()
-        pinPad.visibility = View.VISIBLE
-        bottomRow.visibility = View.INVISIBLE
-        arrows.visibility = View.INVISIBLE
-                clock.visibility = View.INVISIBLE
-        if (Build.VERSION.SDK_INT >= 31) {
-            photoView?.setRenderEffect(
-                android.graphics.RenderEffect.createBlurEffect(30f, 30f, android.graphics.Shader.TileMode.CLAMP)
-            )
+    private fun toggleNotificationPanel(root: FrameLayout) {
+        val existing = notificationPanel
+        if (existing != null) {
+            root.removeView(existing)
+            notificationPanel = null
+            return
         }
-        clock.pivotX = clock.width / 2f
-        clock.pivotY = 0f
-        clock.animate().scaleX(0.5f).scaleY(0.5f).setDuration(200).start()
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            setBackgroundColor(Color.parseColor("#E6222228"))
+            isClickable = true
+        }
+        val title = TextView(this).apply {
+            text = "Notifications"
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, dp(10))
+        }
+        panel.addView(title)
+        val listenerEnabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            ?.contains(packageName) == true
+        if (listenerEnabled && Notifs.items.isNotEmpty()) {
+            panel.addView(Notifs.buildRow(this))
+        } else if (listenerEnabled) {
+            panel.addView(TextView(this).apply {
+                text = "No notifications to show. New notifications will appear here."
+                textSize = 14f
+                setTextColor(Color.WHITE)
+            })
+        } else {
+            panel.addView(TextView(this).apply {
+                text = "Notification access is off. Enable it in the app settings to show notifications here."
+                textSize = 14f
+                setTextColor(Color.WHITE)
+            })
+        }
+        val close = TextView(this).apply {
+            text = "Close"
+            textSize = 14f
+            gravity = Gravity.END
+            setTextColor(Color.WHITE)
+            setPadding(0, dp(12), 0, 0)
+            setOnClickListener {
+                root.removeView(panel)
+                notificationPanel = null
+            }
+        }
+        panel.addView(close)
+        root.addView(panel, lp(match, wrap, Gravity.TOP, dp(12), dp(104), dp(12), 0))
+        notificationPanel = panel
     }
 
-    private fun hidePin() {
-        pinPad.reset()
-        pinPad.visibility = View.GONE
-        bottomRow.visibility = View.VISIBLE
-        arrows.visibility = View.VISIBLE
-                clock.visibility = View.VISIBLE
-        if (Build.VERSION.SDK_INT >= 31) {
-            photoView?.setRenderEffect(null)
-        }
-        clock.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
-    }
-
-    private fun requestUnlock() {
-        if (savedPin() == null) dismissSystemLock() else showPin()
-    }
+    private fun requestUnlock() = dismissSystemLock()
 
     private fun dismissSystemLock() {
         val km = getSystemService(KeyguardManager::class.java)
@@ -283,12 +303,28 @@ class LockActivity : Activity() {
         })
     }
 
+    override fun onStop() {
+        if (torchOn) {
+            try {
+                val cm = getSystemService(CameraManager::class.java)
+                val id = cm.cameraIdList.firstOrNull {
+                    cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                }
+                if (id != null) cm.setTorchMode(id, false)
+            } catch (_: Exception) {
+                // The camera may have been taken by another app or become unavailable.
+            }
+            torchOn = false
+        }
+        super.onStop()
+    }
+
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.action == MotionEvent.ACTION_DOWN) {
             startY = ev.rawY
         }
         if (ev.action == MotionEvent.ACTION_UP) {
-            if (pinPad.visibility != View.VISIBLE && startY - ev.rawY > dp(100)) {
+            if (notificationPanel == null && startY - ev.rawY > dp(100)) {
                 requestUnlock()
             }
         }
@@ -297,6 +333,10 @@ class LockActivity : Activity() {
 
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
-        if (pinPad.visibility == View.VISIBLE) hidePin()
+        val panel = notificationPanel
+        if (panel != null) {
+            (panel.parent as? ViewGroup)?.removeView(panel)
+            notificationPanel = null
+        }
     }
 }
