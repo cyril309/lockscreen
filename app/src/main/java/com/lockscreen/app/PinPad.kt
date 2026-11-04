@@ -36,7 +36,7 @@ class PinPad(
     init {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        setBackgroundColor(Color.parseColor("#D0000000"))
+        setBackgroundColor(Color.parseColor("#80000000"))
         isClickable = true
         val h = resources.displayMetrics.heightPixels
         setPadding(0, (h * 0.11f).toInt(), 0, dp(24))
