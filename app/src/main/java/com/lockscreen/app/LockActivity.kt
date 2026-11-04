@@ -18,6 +18,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -55,6 +56,12 @@ class LockActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+                if (Build.VERSION.SDK_INT >= 28) {
+            val attrs = window.attributes
+            attrs.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            window.attributes = attrs
+        }
         if (Build.VERSION.SDK_INT >= 27) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
