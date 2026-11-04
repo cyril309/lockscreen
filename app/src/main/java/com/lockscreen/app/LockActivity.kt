@@ -183,7 +183,7 @@ class LockActivity : Activity() {
             { dismissSystemLock() }
         )
         pinPad.visibility = View.GONE
-        root.addView(pinPad, lp(match, (screenH * 0.55f).toInt(), Gravity.BOTTOM))
+        root.addView(pinPad, lp(match, match, Gravity.TOP))
 
         setContentView(root)
         hideBars()
