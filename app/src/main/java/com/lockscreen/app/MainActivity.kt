@@ -83,16 +83,20 @@ class MainActivity : Activity() {
             Toast.makeText(this, "PIN removed", Toast.LENGTH_SHORT).show()
         }
 
-        addButton("4. Start lock screen") {
+        addText("4. Start the lock screen. It will also start by itself after a reboot until you tap Stop.", 16f)
+
+        addButton("Start lock screen") {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "Do step 1 first", Toast.LENGTH_LONG).show()
             } else {
+                prefs.edit().putBoolean("autostart", true).apply()
                 startForegroundService(Intent(this, LockService::class.java))
                 Toast.makeText(this, "Lock screen started", Toast.LENGTH_SHORT).show()
             }
         }
 
         addButton("Stop lock screen") {
+            prefs.edit().putBoolean("autostart", false).apply()
             stopService(Intent(this, LockService::class.java))
             Toast.makeText(this, "Lock screen stopped", Toast.LENGTH_SHORT).show()
         }
