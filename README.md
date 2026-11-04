@@ -14,12 +14,12 @@ Android may prevent an app's background service from opening an activity when th
 - **Approximate location:** optional weather uses the most recent available approximate location; it does not continuously track the device. When weather is requested, coordinates are sent to Open-Meteo over HTTPS for the forecast. The weather result and fetch time are cached in app-private preferences and can be cleared in the app.
 - **Wallpaper:** the selected image is copied into app-private storage and resized for display. Removing the wallpaper deletes that app copy.
 - **Internet:** used only for the optional Open-Meteo weather request.
-- The app does not request draw-over-other-apps access. Its lockscreen-style activity is not a system overlay or secure keyguard.
+- **Display over other apps (optional):** the app declares this permission only so that Android lets the display open by itself when the screen turns on. It is off until you allow it in Android Settings. It is not used to cover other apps, and it does not make this app a secure keyguard or system overlay. Without it, open the display from the service notification.
 
 ## Setup
 
 1. Install the app and keep Android's secure screen lock enabled.
-2. Start the display service from the app. Allow service notifications if Android asks.
+2. Start the display service from the app. Allow service notifications if Android asks. Optionally allow display over other apps so the screen can open by itself when the display turns on.
 3. Optionally enable notification-listener access if you want the Alerts drawer. Keep previews hidden unless you intentionally want their content visible.
 4. Optionally grant approximate location if you want weather. Denying either optional permission leaves the rest of the app usable.
 5. Choose a color or photo wallpaper. Stop the display service from the app when you no longer want it.
