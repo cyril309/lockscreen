@@ -1,9 +1,19 @@
-name: Build APK
+name: Android verification
+
 on:
   push:
+  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,10 +22,12 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v3
+      - name: Run unit tests, lint, and build
+        run: ./gradlew --no-daemon clean testDebugUnitTest lintDebug assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
         with:
-          gradle-version: 8.7
-      - run: gradle assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lockscreen-apk
+          name: lockscreen-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
