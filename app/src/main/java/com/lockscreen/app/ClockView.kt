@@ -27,7 +27,10 @@ class ClockView(context: Context) : View(context) {
         paint.strokeCap = Paint.Cap.ROUND
         paint.strokeJoin = Paint.Join.ROUND
     }
-
+    fun setColor(c: Int) {
+        paint.color = c
+        invalidate()
+    }
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         handler.post(tick)
