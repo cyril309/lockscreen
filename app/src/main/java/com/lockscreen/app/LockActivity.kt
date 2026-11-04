@@ -32,7 +32,7 @@ class LockActivity : Activity() {
     private lateinit var clock: ClockView
     private lateinit var pinPad: PinPad
     private lateinit var bottomRow: LinearLayout
-    private lateinit var arrows: TextView
+    private lateinit var arrows: ImageView
     private var startY = 0f
     private var torchOn = false
 
@@ -60,20 +60,27 @@ class LockActivity : Activity() {
             setTurnScreenOn(true)
         }
 
+        val prefs = getSharedPreferences("lock", Context.MODE_PRIVATE)
+        var theme = prefs.getInt("theme", 0)
+        if (theme < 0 || theme >= Themes.names.size) theme = 0
+
         val screenH = resources.displayMetrics.heightPixels
         val root = FrameLayout(this)
         root.background = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(
-                Color.parseColor("#C8532B"),
-                Color.parseColor("#CF6A35"),
-                Color.parseColor("#B96A4C"),
-                Color.parseColor("#3B3A52"),
-                Color.parseColor("#4A6A96"),
-                Color.parseColor("#8FB4D9"),
-                Color.parseColor("#A9C8E6")
-            )
+            Themes.gradient(theme)
         )
+
+        val photo = Wallpaper.load(this)
+        if (photo != null) {
+            val iv = ImageView(this)
+            iv.setImageBitmap(photo)
+            iv.scaleType = ImageView.ScaleType.CENTER_CROP
+            root.addView(iv, lp(match, match, Gravity.TOP))
+            val shade = View(this)
+            shade.setBackgroundColor(Color.parseColor("#33000000"))
+            root.addView(shade, lp(match, match, Gravity.TOP))
+        }
 
         val bm = getSystemService(BatteryManager::class.java)
         val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -84,9 +91,8 @@ class LockActivity : Activity() {
         root.addView(battery, lp(wrap, wrap, Gravity.TOP or Gravity.END, 0, dp(12), dp(20), 0))
 
         val lock = ImageView(this)
-        lock.setImageResource(android.R.drawable.ic_lock_idle_lock)
-        lock.setColorFilter(Color.WHITE)
-        root.addView(lock, lp(dp(18), dp(18), Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(36), 0, 0))
+        lock.setImageResource(R.drawable.ic_lock_open)
+        root.addView(lock, lp(dp(20), dp(20), Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(36), 0, 0))
 
         val date = TextView(this)
         date.text = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date())
@@ -95,20 +101,19 @@ class LockActivity : Activity() {
         root.addView(date, lp(wrap, wrap, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(64), 0, 0))
 
         clock = ClockView(this)
+        clock.setColor(Themes.clock(theme))
         root.addView(clock, lp(match, (screenH * 0.42f).toInt(), Gravity.TOP, 0, (screenH * 0.14f).toInt(), 0, 0))
 
-        arrows = TextView(this)
-        arrows.text = "▲\n▲"
-        arrows.textSize = 12f
-        arrows.gravity = Gravity.CENTER
-        arrows.setTextColor(Color.parseColor("#E8E2DC"))
-        root.addView(arrows, lp(wrap, wrap, Gravity.BOTTOM or Gravity.END, 0, 0, dp(26), dp(108)))
+        arrows = ImageView(this)
+        arrows.setImageResource(R.drawable.ic_chevrons)
+        arrows.setColorFilter(Color.parseColor("#E8E2DC"))
+        root.addView(arrows, lp(dp(26), dp(26), Gravity.BOTTOM or Gravity.END, 0, 0, dp(24), dp(108)))
 
         bottomRow = LinearLayout(this)
         bottomRow.orientation = LinearLayout.HORIZONTAL
         bottomRow.gravity = Gravity.CENTER_VERTICAL
 
-        val assistant = circle("★", Color.parseColor("#F4F1EC"), Color.parseColor("#5B7BD5"))
+        val assistant = iconCircle(R.drawable.ic_sparkle, Color.parseColor("#F4F1EC"), Color.parseColor("#5B7BD5"))
         assistant.setOnClickListener {
             try {
                 startActivity(Intent(Intent.ACTION_VOICE_COMMAND).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -118,7 +123,7 @@ class LockActivity : Activity() {
         }
         bottomRow.addView(assistant, LinearLayout.LayoutParams(dp(44), dp(44)))
 
-        val torch = circle("☼", Color.parseColor("#3B3157"), Color.WHITE)
+        val torch = iconCircle(R.drawable.ic_torch, Color.parseColor("#3B3157"), Color.WHITE)
         torch.setOnClickListener { toggleTorch() }
         val torchParams = LinearLayout.LayoutParams(dp(44), dp(44))
         torchParams.setMargins(dp(8), 0, 0, 0)
@@ -143,7 +148,7 @@ class LockActivity : Activity() {
         pillParams.setMargins(dp(10), 0, dp(10), 0)
         bottomRow.addView(pill, pillParams)
 
-        val camera = circle("◉", Color.parseColor("#A85D3A"), Color.WHITE)
+        val camera = iconCircle(R.drawable.ic_camera, Color.parseColor("#A85D3A"), Color.WHITE)
         camera.setOnClickListener {
             try {
                 startActivity(
@@ -207,17 +212,16 @@ class LockActivity : Activity() {
         }
     }
 
-    private fun circle(label: String, bg: Int, fg: Int): TextView {
-        val t = TextView(this)
-        t.text = label
-        t.textSize = 18f
-        t.setTextColor(fg)
-        t.gravity = Gravity.CENTER
+    private fun iconCircle(res: Int, bg: Int, tint: Int): ImageView {
+        val v = ImageView(this)
+        v.setImageResource(res)
+        v.setColorFilter(tint)
+        v.setPadding(dp(11), dp(11), dp(11), dp(11))
         val g = GradientDrawable()
         g.shape = GradientDrawable.OVAL
         g.setColor(bg)
-        t.background = g
-        return t
+        v.background = g
+        return v
     }
 
     private fun showPin() {
