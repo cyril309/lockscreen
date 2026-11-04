@@ -34,6 +34,7 @@ class LockActivity : Activity() {
     private lateinit var pinPad: PinPad
     private lateinit var bottomRow: LinearLayout
     private lateinit var arrows: ImageView
+    private var photoView: ImageView? = null
     private var startY = 0f
     private var torchOn = false
 
@@ -81,6 +82,7 @@ class LockActivity : Activity() {
         val photo = Wallpaper.load(this)
         if (photo != null) {
             val iv = ImageView(this)
+            photoView = iv
             iv.setImageBitmap(photo)
             iv.scaleType = ImageView.ScaleType.CENTER_CROP
             root.addView(iv, lp(match, match, Gravity.TOP))
@@ -241,6 +243,12 @@ class LockActivity : Activity() {
         pinPad.visibility = View.VISIBLE
         bottomRow.visibility = View.INVISIBLE
         arrows.visibility = View.INVISIBLE
+                clock.visibility = View.INVISIBLE
+        if (Build.VERSION.SDK_INT >= 31) {
+            photoView?.setRenderEffect(
+                android.graphics.RenderEffect.createBlurEffect(30f, 30f, android.graphics.Shader.TileMode.CLAMP)
+            )
+        }
         clock.pivotX = clock.width / 2f
         clock.pivotY = 0f
         clock.animate().scaleX(0.5f).scaleY(0.5f).setDuration(200).start()
@@ -251,6 +259,10 @@ class LockActivity : Activity() {
         pinPad.visibility = View.GONE
         bottomRow.visibility = View.VISIBLE
         arrows.visibility = View.VISIBLE
+                clock.visibility = View.VISIBLE
+        if (Build.VERSION.SDK_INT >= 31) {
+            photoView?.setRenderEffect(null)
+        }
         clock.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
     }
 
