@@ -141,6 +141,10 @@ class LockActivity : Activity() {
         root.addView(homeBar, lp(dp(134), dp(5), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 0, 0, dp(10)))
 
         setContentView(root)
+                   root.setOnLongClickListener {
+               ClockCustomizer.show(this, root, clock)
+               true
+           }
         hideBars()
     }
 
@@ -243,7 +247,7 @@ class LockActivity : Activity() {
             startY = ev.rawY
         }
         if (ev.action == MotionEvent.ACTION_UP) {
-            if (startY - ev.rawY > dp(100)) {
+                if (!ClockCustomizer.isOpen && startY - ev.rawY > dp(100)) {
                 dismissSystemLock()
             }
         }
