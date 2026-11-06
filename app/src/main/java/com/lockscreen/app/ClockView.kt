@@ -13,21 +13,26 @@ import android.os.Looper
 import android.view.View
 import java.util.Calendar
 
-class ClockView(context: Context) : View(context) {
+class ClockView(
+    context: Context,
+    private val fixedText: String? = null,
+    private val forcedStyle: Int? = null
+) : View(context) {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val handler = Handler(Looper.getMainLooper())
     private var tint = Color.parseColor("#BCD2EE")
+
+    private val heightFrac = floatArrayOf(1f, 1f, 0.62f, 0.48f)
+    private val widthFrac = floatArrayOf(0.66f, 0.66f, 0.84f, 0.92f)
+    private val maxDwRatio = floatArrayOf(0.30f, 0.30f, 0.42f, 0.46f)
+    private val rounded = booleanArrayOf(false, true, false, true)
+
     private val tick = object : Runnable {
         override fun run() {
             invalidate()
             handler.postDelayed(this, 10000)
         }
-    }
-
-    init {
-        paint.strokeCap = Paint.Cap.BUTT
-        paint.strokeJoin = Paint.Join.MITER
     }
 
     fun setColor(c: Int) {
@@ -37,7 +42,7 @@ class ClockView(context: Context) : View(context) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        handler.post(tick)
+        if (fixedText == null) handler.post(tick)
     }
 
     override fun onDetachedFromWindow() {
@@ -51,37 +56,61 @@ class ClockView(context: Context) : View(context) {
     private fun widthFactor(d: Int): Float = if (d == 1) 0.55f else 1f
 
     override fun onDraw(canvas: Canvas) {
-        val cal = Calendar.getInstance()
-        var hour = cal.get(Calendar.HOUR)
-        if (hour == 0) hour = 12
-        val minute = cal.get(Calendar.MINUTE)
-        val hourDigits = hour.toString().map { it - '0' }
-        val digits = hourDigits + listOf(minute / 10, minute % 10)
+        val prefs = context.getSharedPreferences("lock", Context.MODE_PRIVATE)
+        val style = (forcedStyle ?: prefs.getInt("clock_style", 0)).coerceIn(0, 3)
+        val weight = prefs.getInt("clock_weight", 48).coerceIn(0, 100)
+        val glass = prefs.getBoolean("clock_glass", true)
+        val sizeScale = if (fixedText != null) 1f else prefs.getInt("clock_size", 100).coerceIn(60, 100) / 100f
+        val saved = prefs.getInt("clock_color", 0)
+        val base = if (saved != 0) saved else tint
 
-        val h = height.toFloat()
-        paint.shader = LinearGradient(
-            0f, 0f, 0f, h,
-            withAlpha(tint, 0xF2), withAlpha(tint, 0x99),
-            Shader.TileMode.CLAMP
-        )
+        val digits: List<Int>
+        val colonAt: Int
+        if (fixedText != null) {
+            digits = fixedText.map { it - '0' }
+            colonAt = -1
+        } else {
+            val cal = Calendar.getInstance()
+            var hour = cal.get(Calendar.HOUR)
+            if (hour == 0) hour = 12
+            val minute = cal.get(Calendar.MINUTE)
+            val hourDigits = hour.toString().map { it - '0' }
+            digits = hourDigits + listOf(minute / 10, minute % 10)
+            colonAt = hourDigits.size
+        }
 
-        var weight = 0f
-        for (d in digits) weight += widthFactor(d)
+        val h = height.toFloat() * heightFrac[style] * sizeScale
+        paint.strokeCap = if (rounded[style]) Paint.Cap.ROUND else Paint.Cap.BUTT
+        paint.strokeJoin = if (rounded[style]) Paint.Join.ROUND else Paint.Join.MITER
+        paint.color = base
+        paint.shader = if (glass) {
+            LinearGradient(
+                0f, 0f, 0f, h,
+                withAlpha(base, 0xF2), withAlpha(base, 0x99),
+                Shader.TileMode.CLAMP
+            )
+        } else {
+            null
+        }
+
+        var weightSum = 0f
+        for (d in digits) weightSum += widthFactor(d)
         val gapUnits = 0.28f
-        val colonUnits = 0.3f
-        val units = weight + colonUnits + gapUnits * digits.size
+        val colonUnits = if (colonAt >= 0) 0.3f else 0f
+        val gapCount = if (colonAt >= 0) digits.size else digits.size - 1
+        val units = weightSum + colonUnits + gapUnits * gapCount
 
-        var dw = width * 0.66f / units
-        val maxDw = h * 0.30f
+        var dw = width * widthFrac[style] / units
+        val maxDw = h * maxDwRatio[style]
         if (dw > maxDw) dw = maxDw
         val gap = dw * gapUnits
         val colonW = dw * colonUnits
-        val sw = dw * 0.26f
-        val total = weight * dw + colonW + gap * digits.size
+        val sw = dw * (0.16f + 0.22f * weight / 100f)
+        val total = weightSum * dw + colonW + gap * gapCount
         var x = (width - total) / 2f
 
         for (i in digits.indices) {
-            if (i == hourDigits.size) {
+            if (i == colonAt) {
                 paint.style = Paint.Style.FILL
                 val cx = x + colonW / 2f
                 canvas.drawCircle(cx, h * 0.32f, sw * 0.5f, paint)
