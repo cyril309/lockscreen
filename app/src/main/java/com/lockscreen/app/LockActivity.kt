@@ -111,8 +111,8 @@ class LockActivity : Activity() {
         root.addView(clock, lp(match, (screenH * 0.42f).toInt(), Gravity.TOP, 0, (screenH * 0.14f).toInt(), 0, 0))
 
         // Notification cards sit on the display like iOS. Previews are hidden unless you turn them on in the app.
-        val cards = Notifs.buildRow(this)
-        root.addView(cards, lp(match, wrap, Gravity.TOP, 0, (screenH * 0.57f).toInt(), 0, 0))
+                 val cards = Notifs.buildRow(this, (screenH * 0.5f).toInt())
+           root.addView(cards, lp(match, wrap, Gravity.BOTTOM, 0, 0, 0, dp(118)))
 
         torchButton = glassButton(R.drawable.ic_torch)
         torchButton.contentDescription = "Flashlight"
