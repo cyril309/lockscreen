@@ -113,6 +113,7 @@ object ClockCustomizer {
         content.orientation = LinearLayout.VERTICAL
 
         fun close() {
+            clock.background = null
             root.removeView(panel)
             panelRef = null
             if (needsRebuild) activity.recreate()
@@ -294,6 +295,13 @@ object ClockCustomizer {
         scroll.isVerticalScrollBarEnabled = false
         scroll.addView(content)
         panel.addView(scroll)
+
+        // While customizing, outline the clock area like iOS edit mode.
+        val frame = GradientDrawable()
+        frame.cornerRadius = px(14).toFloat()
+        frame.setColor(Color.TRANSPARENT)
+        frame.setStroke(px(2), Color.parseColor("#99FFFFFF"))
+        clock.background = frame
 
         panelRef = panel
         root.addView(panel, FrameLayout.LayoutParams(match, wrap, Gravity.BOTTOM))
