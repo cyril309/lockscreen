@@ -18,6 +18,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -91,7 +92,8 @@ class LockActivity : Activity() {
         root.addView(battery, lp(wrap, wrap, Gravity.TOP or Gravity.END, 0, dp(12), dp(20), 0))
 
         val lock = ImageView(this)
-        lock.setImageResource(R.drawable.ic_lock_open)
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        lock.setImageResource(if (keyguard.isKeyguardLocked) R.drawable.ic_lock else R.drawable.ic_lock_open)
         root.addView(lock, lp(dp(20), dp(20), Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(36), 0, 0))
 
         val date = TextView(this)
@@ -172,6 +174,8 @@ class LockActivity : Activity() {
     private fun hideBars() {
         if (Build.VERSION.SDK_INT >= 30) {
             window.setDecorFitsSystemWindows(false)
+            window.insetsController?.systemBarsBehavior =
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             window.insetsController?.hide(WindowInsets.Type.systemBars())
         } else {
             window.decorView.systemUiVisibility =
