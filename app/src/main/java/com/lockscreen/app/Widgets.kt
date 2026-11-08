@@ -65,6 +65,24 @@ class WidgetView(context: Context, private val kind: String) : View(context) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val d = resources.displayMetrics.density
 
+    // Redraw every few seconds so the weather, alarm and battery update after the screen has opened.
+    private val refreshTick = object : Runnable {
+        override fun run() {
+            invalidate()
+            postDelayed(this, 4000)
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        post(refreshTick)
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(refreshTick)
+        super.onDetachedFromWindow()
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val s = (64 * d).toInt()
         setMeasuredDimension(s, s)
