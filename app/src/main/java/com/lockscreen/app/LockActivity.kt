@@ -32,6 +32,7 @@ class LockActivity : Activity() {
 
     private lateinit var torchButton: ImageView
     private var startY = 0f
+    private var swipeFired = false
     private var torchOn = false
 
     private val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
@@ -236,6 +237,15 @@ class LockActivity : Activity() {
             override fun onDismissSucceeded() {
                 finish()
             }
+
+            override fun onDismissError() {
+                swipeFired = false
+                Toast.makeText(this@LockActivity, "Android could not open the unlock screen", Toast.LENGTH_SHORT).show()
+            }
+
+            override fun onDismissCancelled() {
+                swipeFired = false
+            }
         })
     }
 
@@ -254,14 +264,20 @@ class LockActivity : Activity() {
         super.onStop()
     }
 
+    // Swipe up anywhere (except on the open notification list or the Customize panel) to unlock.
+    // It fires as soon as the finger has moved far enough, so it still works if Android cancels the gesture.
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (ev.action == MotionEvent.ACTION_DOWN) {
-            startY = ev.rawY
-        }
-        if (ev.action == MotionEvent.ACTION_UP) {
-            val blocked = ClockCustomizer.isOpen || Notifs.startsInList(startY)
-            if (!blocked && startY - ev.rawY > dp(100)) {
-                dismissSystemLock()
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                startY = ev.rawY
+                swipeFired = false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val blocked = ClockCustomizer.isOpen || Notifs.startsInList(startY)
+                if (!blocked && !swipeFired && startY - ev.rawY > dp(80)) {
+                    swipeFired = true
+                    dismissSystemLock()
+                }
             }
         }
         return super.dispatchTouchEvent(ev)
