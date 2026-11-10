@@ -10,5 +10,5 @@
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2"
         android:strokeLineCap="round"
-        android:pathData="M8,10 V7 A4,4 0 0 1 16,7 V10" />
+        android:pathData="M8,10 V7 A4,4 0 0 1 15.5,5.5" />
 </vector>
