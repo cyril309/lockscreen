@@ -5,11 +5,16 @@ import android.app.KeyguardManager
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Icon
+import android.hardware.biometrics.BiometricManager
+import android.hardware.biometrics.BiometricPrompt
+import android.os.Build
+import android.os.CancellationSignal
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.text.TextUtils
@@ -19,8 +24,10 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 
 class NotifItem(
     val title: String,
@@ -29,7 +36,9 @@ class NotifItem(
     val icon: Icon?,
     val color: Int,
     val pkg: String,
-    val intent: PendingIntent?
+    val intent: PendingIntent?,
+    val progress: Int,
+    val progressMax: Int
 )
 
 class MaxHeightScroll(context: Context, private val maxH: Int) : ScrollView(context) {
@@ -41,6 +50,16 @@ class MaxHeightScroll(context: Context, private val maxH: Int) : ScrollView(cont
 object Notifs {
 
     @Volatile var items: List<NotifItem> = emptyList()
+
+    // "Live activities": ongoing notifications such as downloads, calls, timers and media.
+    @Volatile var live: List<NotifItem> = emptyList()
+
+    // 0 = hidden, 1 = shown after you confirm it's you, 2 = always shown
+    fun previewMode(context: Context): Int {
+        val prefs = context.getSharedPreferences("lock", Context.MODE_PRIVATE)
+        if (prefs.contains("preview_mode")) return prefs.getInt("preview_mode", 0).coerceIn(0, 2)
+        return if (prefs.getBoolean("hidetext", true)) 0 else 2
+    }
 
     @Volatile var expanded: Boolean = false
 
@@ -143,6 +162,89 @@ object Notifs {
         })
     }
 
+    // Android's own fingerprint, face or PIN prompt, like iOS revealing previews after Face ID.
+    private fun authenticate(context: Context, onSuccess: () -> Unit) {
+        val act = context as? Activity ?: return
+        if (Build.VERSION.SDK_INT < 28) {
+            Toast.makeText(act, "Needs Android 9 or newer", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val builder = BiometricPrompt.Builder(act)
+                .setTitle("Show notification content")
+                .setSubtitle("Confirm it's you")
+            if (Build.VERSION.SDK_INT >= 30) {
+                builder.setAllowedAuthenticators(
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                        BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                )
+            } else {
+                builder.setNegativeButton("Cancel", act.mainExecutor) { _, _ -> }
+            }
+            builder.build().authenticate(
+                CancellationSignal(),
+                act.mainExecutor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        onSuccess()
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            Toast.makeText(act, "Could not start the confirmation screen", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun liveCard(context: Context, item: NotifItem, hide: Boolean, px: (Int) -> Int): LinearLayout {
+        val col = LinearLayout(context)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(px(12), px(10), px(12), px(10))
+        col.background = roundBox("#99000000", 22, true, px)
+
+        val top = LinearLayout(context)
+        top.orientation = LinearLayout.HORIZONTAL
+        top.gravity = Gravity.CENTER_VERTICAL
+        top.addView(iconView(context, item, px), LinearLayout.LayoutParams(px(38), px(38)))
+
+        val texts = LinearLayout(context)
+        texts.orientation = LinearLayout.VERTICAL
+
+        val title = TextView(context)
+        title.text = if (hide) "Live activity" else item.title.ifEmpty { "Live activity" }
+        title.textSize = 14f
+        title.setTypeface(null, Typeface.BOLD)
+        title.setTextColor(Color.WHITE)
+        title.maxLines = 1
+        title.ellipsize = TextUtils.TruncateAt.END
+        texts.addView(title)
+
+        val body = TextView(context)
+        body.text = if (hide) "Unlock to view" else item.text
+        body.textSize = 13f
+        body.setTextColor(Color.parseColor("#E6FFFFFF"))
+        body.maxLines = 1
+        body.ellipsize = TextUtils.TruncateAt.END
+        texts.addView(body)
+
+        val tp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        tp.setMargins(px(10), 0, px(8), 0)
+        top.addView(texts, tp)
+        col.addView(top)
+
+        if (!hide && item.progressMax > 0 && item.progress >= 0) {
+            val bar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal)
+            bar.max = item.progressMax
+            bar.progress = item.progress
+            bar.progressTintList = ColorStateList.valueOf(Color.WHITE)
+            bar.progressBackgroundTintList = ColorStateList.valueOf(Color.parseColor("#44FFFFFF"))
+            val bp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(6))
+            bp.setMargins(px(2), px(8), px(2), 0)
+            col.addView(bar, bp)
+        }
+        col.setOnClickListener { openItem(context, item) }
+        return col
+    }
+
     private fun card(
         context: Context,
         item: NotifItem,
@@ -200,7 +302,8 @@ object Notifs {
         val d = context.resources.displayMetrics.density
         val px: (Int) -> Int = { v -> (v * d).toInt() }
         val prefs = context.getSharedPreferences("lock", Context.MODE_PRIVATE)
-        val hide = prefs.getBoolean("hidetext", true)
+        val pMode = previewMode(context)
+        var revealed = pMode == 2
         // 0 = stack, 1 = list, 2 = count
         val mode = prefs.getInt("notif_mode", 0).coerceIn(0, 2)
         val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
@@ -214,6 +317,34 @@ object Notifs {
             outer.removeAllViews()
             listView = null
             expanded = open && items.isNotEmpty()
+            val hide = !revealed
+            if (items.isEmpty() && live.isEmpty()) return
+
+            if (pMode == 1 && !revealed) {
+                val reveal = TextView(context)
+                reveal.text = "Confirm it's you to show content"
+                reveal.textSize = 12f
+                reveal.setTextColor(Color.WHITE)
+                reveal.gravity = Gravity.CENTER
+                reveal.setPadding(px(14), px(7), px(14), px(7))
+                reveal.background = roundBox("#66000000", 16, true, px)
+                reveal.setOnClickListener {
+                    authenticate(context) {
+                        revealed = true
+                        render(open)
+                    }
+                }
+                val rp = LinearLayout.LayoutParams(wrap, wrap)
+                rp.gravity = Gravity.CENTER_HORIZONTAL
+                rp.setMargins(0, 0, 0, px(8))
+                outer.addView(reveal, rp)
+            }
+
+            for (item in live.take(2)) {
+                val lp = LinearLayout.LayoutParams(match, wrap)
+                lp.setMargins(0, 0, 0, px(8))
+                outer.addView(liveCard(context, item, hide, px), lp)
+            }
             if (items.isEmpty()) return
 
             if (open) {
@@ -334,6 +465,7 @@ class NotifService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         Notifs.items = emptyList()
+        Notifs.live = emptyList()
         super.onListenerDisconnected()
     }
 
@@ -349,35 +481,51 @@ class NotifService : NotificationListenerService() {
         refresh()
     }
 
+    private fun isLive(n: StatusBarNotification): Boolean {
+        if (n.notification.extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0) return true
+        val category = n.notification.category ?: return false
+        return category in setOf("progress", "transport", "call", "stopwatch", "navigation")
+    }
+
     private fun refresh() {
         val found = ArrayList<NotifItem>()
+        val liveFound = ArrayList<NotifItem>()
+        // When previews are off, the text is never kept in memory at all.
+        val keepText = Notifs.previewMode(this) != 0
         try {
             val active = activeNotifications
             if (active != null) {
                 val sorted = active.sortedByDescending { it.postTime }
                 for (n in sorted) {
                     if (n.packageName == packageName) continue
-                    if (n.isOngoing) continue
                     if ((n.notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) continue
                     val ex = n.notification.extras
                     val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
                     val text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
                     if (title.isEmpty() && text.isEmpty()) continue
-                    found.add(
-                        NotifItem(
-                            title,
-                            text,
-                            n.postTime,
-                            n.notification.smallIcon,
-                            n.notification.color,
-                            n.packageName,
-                            n.notification.contentIntent
-                        )
+                    val max = ex.getInt(Notification.EXTRA_PROGRESS_MAX, 0)
+                    val progress = ex.getInt(Notification.EXTRA_PROGRESS, 0)
+                    val item = NotifItem(
+                        if (keepText) title else "",
+                        if (keepText) text else "",
+                        n.postTime,
+                        n.notification.smallIcon,
+                        n.notification.color,
+                        n.packageName,
+                        n.notification.contentIntent,
+                        if (max > 0) progress else -1,
+                        max
                     )
+                    if (n.isOngoing) {
+                        if (isLive(n)) liveFound.add(item)
+                    } else {
+                        found.add(item)
+                    }
                 }
             }
         } catch (e: Exception) {
         }
         Notifs.items = found
+        Notifs.live = liveFound
     }
 }
