@@ -290,6 +290,15 @@ object ClockCustomizer {
             needsRebuild = true
         })
 
+        content.addView(label("Previews"))
+        content.addView(chips(
+            listOf("Hidden", "After confirm", "Always"),
+            { setOf(Notifs.previewMode(activity)) }
+        ) {
+            prefs.edit().putInt("preview_mode", it).apply()
+            needsRebuild = true
+        })
+
         val maxH = (activity.resources.displayMetrics.heightPixels * 0.55f).toInt()
         val scroll = MaxHeightScroll(activity, maxH)
         scroll.isVerticalScrollBarEnabled = false
