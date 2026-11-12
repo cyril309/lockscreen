@@ -1,5 +1,7 @@
 package com.lockscreen.app
 
+import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.app.Activity
 import android.app.KeyguardManager
 import android.app.Notification
@@ -163,6 +165,8 @@ object Notifs {
     }
 
     // Android's own fingerprint, face or PIN prompt, like iOS revealing previews after Face ID.
+    @SuppressLint("NewApi")
+    @TargetApi(28)
     private fun authenticate(context: Context, onSuccess: () -> Unit) {
         val act = context as? Activity ?: return
         if (Build.VERSION.SDK_INT < 28) {
