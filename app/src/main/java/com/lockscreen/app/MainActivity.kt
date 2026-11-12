@@ -106,10 +106,14 @@ class MainActivity : Activity() {
             "Notification access lets the app read notification titles and previews so it can show them on the display. Leave it off if you do not want that. Notification text is hidden by default.",
             14f
         )
-        addButton("Toggle notification preview privacy") {
-            val hide = !prefs.getBoolean("hidetext", true)
-            prefs.edit().putBoolean("hidetext", hide).apply()
-            Toast.makeText(this, if (hide) "Notification previews hidden" else "Notification previews visible", Toast.LENGTH_SHORT).show()
+        addButton("Notification previews: hidden / after confirm / always") {
+            val next = (Notifs.previewMode(this) + 1) % 3
+            prefs.edit().putInt("preview_mode", next).apply()
+            Toast.makeText(
+                this,
+                listOf("Previews hidden", "Previews shown after you confirm it's you", "Previews always shown")[next],
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         locationStatus = addText("Weather location: checking…", 14f)
