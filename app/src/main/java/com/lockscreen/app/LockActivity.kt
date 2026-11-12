@@ -1,10 +1,17 @@
 package com.lockscreen.app
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
+import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.hardware.camera2.CameraCharacteristics
@@ -33,6 +40,12 @@ class LockActivity : Activity() {
     private lateinit var torchButton: ImageView
     private var startY = 0f
     private var swipeFired = false
+    private var dragging = false
+    private var swipeProgress = 0f
+    private var baseDim = 0f
+    private var photoView: ImageView? = null
+    private lateinit var content: FrameLayout
+    private lateinit var dim: View
     private var torchOn = false
 
     private val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
@@ -79,10 +92,18 @@ class LockActivity : Activity() {
             iv.setImageBitmap(photo)
             iv.scaleType = ImageView.ScaleType.CENTER_CROP
             root.addView(iv, lp(match, match, Gravity.TOP))
-            val shade = View(this)
-            shade.setBackgroundColor(Color.parseColor("#33000000"))
-            root.addView(shade, lp(match, match, Gravity.TOP))
+            photoView = iv
         }
+        // A dark layer that fades in while you swipe up, so the wallpaper stays visible but calmer.
+        baseDim = if (photo != null) 0.2f else 0f
+        dim = View(this)
+        dim.setBackgroundColor(Color.BLACK)
+        dim.alpha = baseDim
+        root.addView(dim, lp(match, match, Gravity.TOP))
+
+        // Everything on the lock screen lives here, so it can slide up and fade as one piece.
+        content = FrameLayout(this)
+        root.addView(content, lp(match, match, Gravity.TOP))
 
         val bm = getSystemService(BatteryManager::class.java)
         val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -90,12 +111,12 @@ class LockActivity : Activity() {
         battery.text = "$level%"
         battery.textSize = 13f
         battery.setTextColor(Color.WHITE)
-        root.addView(battery, lp(wrap, wrap, Gravity.TOP or Gravity.END, 0, dp(12), dp(20), 0))
+        content.addView(battery, lp(wrap, wrap, Gravity.TOP or Gravity.END, 0, dp(12), dp(20), 0))
 
         val lock = ImageView(this)
         val keyguard = getSystemService(KeyguardManager::class.java)
         lock.setImageResource(if (keyguard.isKeyguardLocked) R.drawable.ic_lock else R.drawable.ic_lock_open)
-        root.addView(lock, lp(dp(20), dp(20), Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(36), 0, 0))
+        content.addView(lock, lp(dp(20), dp(20), Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(36), 0, 0))
 
         val date = TextView(this)
         val dateText = SimpleDateFormat("EEE d MMM", Locale.getDefault()).format(Date())
@@ -108,26 +129,26 @@ class LockActivity : Activity() {
         date.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         date.setTextColor(Color.parseColor("#E6FFFFFF"))
         Looks.styleDate(this, date)
-        root.addView(date, lp(wrap, wrap, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(60), 0, 0))
+        content.addView(date, lp(wrap, wrap, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, dp(60), 0, 0))
 
         val clock = ClockView(this)
         clock.setColor(Themes.clock(theme))
-        root.addView(clock, lp(match, (screenH * 0.42f).toInt(), Gravity.TOP, 0, (screenH * 0.14f).toInt(), 0, 0))
+        content.addView(clock, lp(match, (screenH * 0.42f).toInt(), Gravity.TOP, 0, (screenH * 0.14f).toInt(), 0, 0))
 
         // Widgets sit under the clock. Choose them in Customize (press and hold the screen).
-        root.addView(
+        content.addView(
             Widgets.buildRow(this),
             lp(match, wrap, Gravity.TOP, 0, Widgets.topMargin(this, screenH), 0, 0)
         )
 
         // Notifications sit above the buttons like iOS. Previews are hidden unless you turn them on in the app.
         val cards = Notifs.buildRow(this, (screenH * 0.5f).toInt())
-        root.addView(cards, lp(match, wrap, Gravity.BOTTOM, 0, 0, 0, dp(118)))
+        content.addView(cards, lp(match, wrap, Gravity.BOTTOM, 0, 0, 0, dp(118)))
 
         torchButton = glassButton(R.drawable.ic_torch)
         torchButton.contentDescription = "Flashlight"
         torchButton.setOnClickListener { toggleTorch() }
-        root.addView(torchButton, lp(dp(52), dp(52), Gravity.BOTTOM or Gravity.START, dp(40), 0, 0, dp(52)))
+        content.addView(torchButton, lp(dp(52), dp(52), Gravity.BOTTOM or Gravity.START, dp(40), 0, 0, dp(52)))
 
         val camera = glassButton(R.drawable.ic_camera)
         camera.contentDescription = "Camera"
@@ -141,14 +162,14 @@ class LockActivity : Activity() {
                 Toast.makeText(this, "No camera found", Toast.LENGTH_SHORT).show()
             }
         }
-        root.addView(camera, lp(dp(52), dp(52), Gravity.BOTTOM or Gravity.END, 0, 0, dp(40), dp(52)))
+        content.addView(camera, lp(dp(52), dp(52), Gravity.BOTTOM or Gravity.END, 0, 0, dp(40), dp(52)))
 
         val homeBar = View(this)
         val barBg = GradientDrawable()
         barBg.cornerRadius = dp(3).toFloat()
         barBg.setColor(Color.parseColor("#D9FFFFFF"))
         homeBar.background = barBg
-        root.addView(homeBar, lp(dp(134), dp(5), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 0, 0, dp(10)))
+        content.addView(homeBar, lp(dp(134), dp(5), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 0, 0, dp(10)))
 
         setContentView(root)
         // Press and hold an empty part of the screen to customize the clock, widgets and notifications.
@@ -161,7 +182,14 @@ class LockActivity : Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideBars()
+        if (hasFocus) {
+            hideBars()
+            // Back from Android's unlock screen without unlocking: bring the lock screen back.
+            if (swipeFired) {
+                swipeFired = false
+                animateProgress(0f, 220)
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -240,11 +268,13 @@ class LockActivity : Activity() {
 
             override fun onDismissError() {
                 swipeFired = false
+                animateProgress(0f, 220)
                 Toast.makeText(this@LockActivity, "Android could not open the unlock screen", Toast.LENGTH_SHORT).show()
             }
 
             override fun onDismissCancelled() {
                 swipeFired = false
+                animateProgress(0f, 220)
             }
         })
     }
@@ -264,23 +294,73 @@ class LockActivity : Activity() {
         super.onStop()
     }
 
-    // Swipe up anywhere (except on the open notification list or the Customize panel) to unlock.
-    // It fires as soon as the finger has moved far enough, so it still works if Android cancels the gesture.
+    // The lock screen follows your finger: it slides up and fades while the wallpaper blurs and dims.
+    // Let go early and it springs back. Go far enough and Android's own unlock screen opens over the wallpaper.
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        val range = resources.displayMetrics.heightPixels * 0.30f
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 startY = ev.rawY
                 swipeFired = false
+                dragging = false
             }
             MotionEvent.ACTION_MOVE -> {
-                val blocked = ClockCustomizer.isOpen || Notifs.startsInList(startY)
-                if (!blocked && !swipeFired && startY - ev.rawY > dp(80)) {
-                    swipeFired = true
-                    dismissSystemLock()
+                if (!swipeFired) {
+                    val blocked = ClockCustomizer.isOpen || Notifs.startsInList(startY)
+                    val dy = startY - ev.rawY
+                    if (!blocked && dy > dp(10)) {
+                        dragging = true
+                        val p = (dy / range).coerceIn(0f, 1f)
+                        applyProgress(p)
+                        if (p >= 0.6f) {
+                            swipeFired = true
+                            animateProgress(1f, 160) { dismissSystemLock() }
+                        }
+                    }
                 }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (dragging && !swipeFired) animateProgress(0f, 200)
+                dragging = false
             }
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    private fun applyProgress(p: Float) {
+        swipeProgress = p
+        val range = resources.displayMetrics.heightPixels * 0.30f
+        content.translationY = -p * range * 0.45f
+        content.alpha = 1f - 0.95f * p
+        dim.alpha = baseDim + (0.5f - baseDim) * p
+        setBlur(p)
+    }
+
+    private fun animateProgress(to: Float, ms: Long, onEnd: (() -> Unit)? = null) {
+        val a = ValueAnimator.ofFloat(swipeProgress, to)
+        a.duration = ms
+        a.addUpdateListener { applyProgress(it.animatedValue as Float) }
+        if (onEnd != null) {
+            a.addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    onEnd()
+                }
+            })
+        }
+        a.start()
+    }
+
+    @SuppressLint("NewApi")
+    @TargetApi(31)
+    private fun setBlur(p: Float) {
+        if (Build.VERSION.SDK_INT < 31) return
+        val view = photoView ?: return
+        val r = 28f * p
+        if (r < 1f) {
+            view.setRenderEffect(null)
+        } else {
+            view.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP))
+        }
     }
 
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
