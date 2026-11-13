@@ -36,9 +36,10 @@ object Widgets {
     // Where the widget row starts, depending on the clock layout.
     fun topMargin(context: Context, screenH: Int): Int {
         val d = context.resources.displayMetrics.density
-        val compact = context.getSharedPreferences("lock", Context.MODE_PRIVATE)
-            .getInt("clock_layout", 0) == 1
-        return if (compact) (screenH * 0.14f + 100 * d).toInt() else (screenH * 0.575f).toInt()
+        val prefs = context.getSharedPreferences("lock", Context.MODE_PRIVATE)
+        val compact = prefs.getInt("clock_layout", 0) == 1
+        val clockTop = screenH * (0.04f + 0.20f * prefs.getInt("clock_pos", 50).coerceIn(0, 100) / 100f)
+        return if (compact) (clockTop + 100 * d).toInt() else (clockTop + screenH * 0.435f).toInt()
     }
 
     fun buildRow(context: Context): LinearLayout {

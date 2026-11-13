@@ -107,6 +107,8 @@ class ClockView(
             null
         }
 
+        val fillShader = paint.shader
+
         var weightSum = 0f
         for (d in digits) weightSum += widthFactor(d, numerals)
         val gapUnits = 0.28f
@@ -147,6 +149,17 @@ class ClockView(
                     canvas.drawPath(outlinePath, paint)
                 } else {
                     canvas.drawPath(path, paint)
+                    if (glass) {
+                        // A fine light edge around each glass digit, like the iOS glass clock.
+                        val edge = Path()
+                        paint.getFillPath(path, edge)
+                        paint.shader = null
+                        paint.color = Color.argb(0x70, 255, 255, 255)
+                        paint.strokeWidth = line * 0.8f
+                        canvas.drawPath(edge, paint)
+                        paint.shader = fillShader
+                        paint.color = base
+                    }
                 }
             } else {
                 val glyph = glyphPath(numeralBases[numerals] + digits[i], cw - sw, h - sw)

@@ -133,7 +133,17 @@ class LockActivity : Activity() {
 
         val clock = ClockView(this)
         clock.setColor(Themes.clock(theme))
-        content.addView(clock, lp(match, (screenH * 0.42f).toInt(), Gravity.TOP, 0, (screenH * 0.14f).toInt(), 0, 0))
+        val clockTop = (screenH * (0.04f + 0.20f * prefs.getInt("clock_pos", 50).coerceIn(0, 100) / 100f)).toInt()
+        content.addView(clock, lp(match, (screenH * 0.42f).toInt(), Gravity.TOP, 0, clockTop, 0, 0))
+
+        // Depth effect: the subject of your wallpaper sits in front of the clock.
+        val cutout = Depth.load(this)
+        if (cutout != null) {
+            val dv = ImageView(this)
+            dv.setImageBitmap(cutout)
+            dv.scaleType = ImageView.ScaleType.CENTER_CROP
+            content.addView(dv, lp(match, match, Gravity.TOP))
+        }
 
         // Widgets sit under the clock. Choose them in Customize (press and hold the screen).
         content.addView(
